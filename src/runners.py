@@ -18,6 +18,7 @@ import boto3 as boto
 import torch.multiprocessing as mp
 
 
+
 #class Trainer:
     
     #def __init___(self, 
@@ -77,20 +78,23 @@ class Trainer:
         #Setting current gradient to zero for new batch
         self.optimizer.zero_grad()
         #Running model on current batch
-        print("running _run_batch")
+        #print("running _run_batch")
         pred_output = self.model(batch)
-        print("Done running batch")
+        #print("Done running batch")
         #Appending predicted values to list for evaluation 
         self.curr_predictions.append(pred_output)
         #Appending label values to list for evaluation
         self.curr_labels.append(batch_labels)
         
         #Computing loss 
-        print(f"PRED OUTPUT: {pred_output}")
-        print(f"BATCH LABEL: {batch_labels}")
+        #print(f"PRED OUTPUT: {pred_output}")
+        #print(f"BATCH LABEL: {batch_labels}")
         loss = self.loss_fn(pred_output.float(),batch_labels.float())
+        
         #Computing gradient for each parameter in model
         loss.backward()
+        #grads = [p.grad for p in self.model.parameters()]
+        #print(grads[:50])
         #Gradient descent 
         self.optimizer.step()
         
@@ -105,29 +109,30 @@ class Trainer:
         self.curr_labels = []
         
         #Looping over each training batch
-        print("training model")
+        #print("training model")
         for batch_tensor, batch_labels in self.train_data:
             
-            print(f"batch_tensor: {batch_tensor.shape}")
-            print(f"batch_labels: {batch_labels.shape}")
+            #print(f"batch_tensor: {batch_tensor.shape}")
+            #print(f"batch_labels: {batch_labels.shape}")
+            #print(batch_tensor)
             
             #Running gradient descent on each batch
             self._run_batch(batch_tensor,batch_labels)
-        print("done training model")
-        print("exiting _run_epoch")
+        #print("done training model")
+        #print("exiting _run_epoch")
     
     #TODO: FINISH how to save to server
     def _save_checkpoint(self, epoch: int):
         #Getting the model weights at particular checkpoint
-        print("in save_checkpoint method")
+        #print("in save_checkpoint method")
         checkpoint_model = self.model.state_dict()
-        print("after getting the state-dict")
+        #print("after getting the state-dict")
         #Pickling model into checkpoint_{epoch} file
         #Note that pickle.dump saves model in local directory
         #Need to delete after dump and upload
         torch.save(checkpoint_model,f'checkpoint_{epoch}.pt')
         #cPickle.dump(checkpoint_model, open(f'checkpoint_{epoch}.pt', 'wb'))
-        print("after pickle dump")
+        #print("after pickle dump")
         #NEED TO FINISH SAVING TO FOLDER OF DICTIONARIES
         
     
@@ -140,17 +145,17 @@ class Trainer:
             print(f"running {epoch} epoch")
             self._run_epoch(epoch)
             
-            print("outside self.save_interval")
+            #print("outside self.save_interval")
             #Code to save the model every save_interval   
             if self.save_interval > 0 and epoch % self.save_interval == 0:
-                print("In save_interval")
+                #print("In save_interval")
                 self._save_checkpoint(epoch)
             #Saving the last model
             elif epoch == num_epochs:
                 self._save_checkpoint(epoch)
 
             #Evaluating model every metric_interval
-            print("outside self.metric_interval")
+            #print("outside self.metric_interval")
             if self.metric_interval > 0 and epoch % self.metric_interval == 0:
                 #Decreases time bc saved inferences for training data in list
                 #Evaluating Training set
@@ -184,10 +189,12 @@ class Trainer:
                 #Looping over each tensor and label in the dataloader
                 for batch_tensor, batch_label in dataloader:
                     #Predicting using model on test set
+                    #print("IN THE ELSE STATEMENT TO TEST TEST SET")
                     prediction = self.model(batch_tensor)
                     #accumulating model predictions and labels of test set
                     test_predict.append(prediction)
                     test_labels.append(batch_label)
+                    #print(f"TEST PREDICT len:{len(test_predict)}")
                 #Vstacking outputs and labels so that tensors read (patient x 1)
                 #Note loss function is MSE, so output from model will be a singular value that relates to our 
                 #actual scale
@@ -206,8 +213,8 @@ class Trainer:
             #Calculating loss of the model for train/test set
             loss = self.loss_fn(predict_output.float(), labels.float())
             #Calculating Mean Absolute Error based on train/test set
-            print(f"PREDICT_OUTPUT: {predict_output}")
-            print(f"LABELS: {labels}")
+            #print(f"PREDICT_OUTPUT: {predict_output}")
+            #print(f"LABELS: {labels}")
             MAE = (predict_output.float() - labels.float()).abs().mean().item()
             
             #Rounding predicted output so that it matches the exact categories given by Norwood scale

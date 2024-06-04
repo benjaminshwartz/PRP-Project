@@ -12,6 +12,7 @@ import torchvision.transforms as T
 from torchvision.transforms import v2
 from torchvision.io import read_image
 
+
 #SINGLE GPU INSTANCE CAPABILITIES ONLY. WILL HAVE TO UPDATE FOR MULTIGPU
 class PRPDataSet(Dataset):
     
@@ -26,19 +27,13 @@ class PRPDataSet(Dataset):
         #path
         self.path = path
         
-        #calculating mean and standard deviation along channels for entire dataset
-        mean,std = self.mean_std()
-        
         self.num_classification_output = num_classification_output
         
-        #transformation used on each image 
-        #Note that mean/std are vectors of len(4) for the alpha,RBG channels
-        self.transforms = v2.Compose([
-            v2.Resize(size),
-            v2.ToImage(), 
-            v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean = mean,std = std)
-        ])
+        self.resize = v2.Resize(size)
+        self.to_image = v2.ToImage()
+        self.to_Dtype = v2.ToDtype(torch.float32, scale=True)
+        
+        
         
     def __len__(self):
         return len(self.patient_ids)
@@ -53,48 +48,44 @@ class PRPDataSet(Dataset):
         #image = cPickle.load(open(f'{self.path}/{patient}/image'),"rb")
         image = read_image(f'{patient}.png')
         
+        #calculating mean and standard deviation along channels for one photo
+        image = self.resize(image)
+        image = self.to_image(image)
+        image = self.to_Dtype(image)
+        mean,std = self.mean_std(image)
+        norm = v2.Normalize(mean=mean,std = std)
+        image = norm(image)
+        
+        #transformation used on each image 
+        #Note that mean/std are vectors of len(4) for the alpha,RBG channels
+        #self.transforms = v2.Compose([
+            #v2.Resize(size),
+            #v2.ToImage(), 
+            #v2.ToDtype(torch.float32, scale=True),
+            #v2.Normalize(mean = mean,std = std)
+        #])
+        
         #Resize image
-        resized_image = self.transforms(image)
+        #resized_image = self.transforms(image)
+        #print(f"IMAGE SUM: {torch.sum(resized_image)}")
         
         #Get label
         label_tensor = [0 for _ in range(self.num_classification_output)]
         label = torch.tensor(self.patient_labels[patient])
-        label_tensor[label] = 1
+        label_tensor[label-1] = 1
         label_tensor = torch.tensor(label_tensor)
         
-        return resized_image, label_tensor
+        return image, label_tensor
     
     #Should maybe try to calculate mean_std deviation once prior to running script and store data
     #So that we do not have to rerun this step everytime the script is rerun 
     #
     #Note we are calculating the mean of pixel average for each the image
     #And the mean of the pixel std. dev for each the images
-    def mean_std(self):
-        #sum accumulator tensor for 4 channels x number of patients
-        sum_values = torch.zeros(4,len(self.patient_ids))
-        #std. dev accumulator tensor for 4 channels x number of patients
-        std_values = torch.zeros(4,len(self.patient_ids))
-        #Looping over photos
-        #Have to do this, cannot vectorize since the images are all of different shapes
-        for i in range(len(self.patient_ids)):
-            #Getting patient
-            patient = self.patient_ids[i]
-            #opening photo from path
-            #Make sure to pickle these images as Tensor objects
-            #image = cPickle.load(open(f'{patient}.png',"rb"))
-            image = read_image(f'{patient}.png').float()
-            #Getting pixel average of the photo
-            pixel_avg = torch.mean(image, dim = (1,2))
-            #Storing patient i in ith row of sum value
-            sum_values[:,i] = pixel_avg
-            #Getting pixel std. dev of the photo
-            pixel_std = torch.std(image, dim = (1,2))
-            #Storing patient i std. dev ith row of std. dev matrix
-            std_values[:,i] = pixel_std
+    def mean_std(self,image):
         
-        #Calculating average mean and std. dev. values
-        a = torch.mean(sum_values, axis = 1)
-        b = torch.mean(std_values, axis = 1)
+        a = torch.mean(image,axis=(1,2))
+        b = torch.mean(image,axis=(1,2))
         
         return a,b
     
@@ -138,6 +129,8 @@ def random_train_test_split(split: tuple, labels:dict):
 
     #Getting test set
     test_patients = patient_set - training_patients
+    #print(list(training_patients))
+    #print(list(test_patients))
 
     #Reconverting back to list 
     return list(training_patients), list(test_patients)
@@ -155,9 +148,10 @@ def get_train_test_dataset(dict_path: str, data_path: str, num_class_output: int
     #If want data split randomly (More Likely used)
         train, test = random_train_test_split(split,patient_labels)
     
+    
     #Creating PRPDataSet objects for both train and test sets
     train_set = PRPDataSet(train,patient_labels,num_class_output,data_path,size)
-    test_set = PRPDataSet(train,patient_labels,num_class_output,data_path,size)
+    test_set = PRPDataSet(test,patient_labels,num_class_output,data_path,size)
     
     return train_set,test_set
 
@@ -165,9 +159,12 @@ def PRPDataLoader(dict_path: str, data_path: str, num_class_output: int,size: tu
     
     #Getting PRPDataSet objects for both rain and test sets 
     train_set, test_set = get_train_test_dataset(dict_path, data_path, num_class_output, size ,sequential, split)
-    
+    #print(f"LEN TRAIN: {len(train_set)}")
     #Creating DataLoader with Train and Set Data sets
     train_generator = DataLoader(train_set, batch_size = batch, shuffle = True)
     test_generator = DataLoader(test_set, batch_size = batch, shuffle = True)
+    
+    #print(f"TRAIN GEN LEN: {len(train_generator)}")
+    #print(f"TEST GEN LEN: {len(test_generator)}")
     
     return train_generator,test_generator

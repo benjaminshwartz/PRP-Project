@@ -22,6 +22,8 @@ def main(dict_path: str,
         hidden_layer_1:int,
         hidden_layer_2:int,
         hidden_layer_3:int,
+        hidden_layer_4:int,
+        hidden_layer_5:int,
         num_classification_output : int,
         dropout: float,
         save_interval:int,
@@ -49,10 +51,12 @@ def main(dict_path: str,
                      hidden_layer_1,
                      hidden_layer_2,
                      hidden_layer_3,
+                     hidden_layer_4,
+                     hidden_layer_5,
                      dropout)
     
     adam_optimizer = torch.optim.Adam(
-        model.parameters(), lr=0.0001, weight_decay=0.0001)
+        model.parameters(), lr=0.001, weight_decay=0.0001)
     
     mse_loss = torch.nn.MSELoss()
 

@@ -13,9 +13,12 @@ class PositionalEncoding(nn.Module):
         super(PositionalEncoding,self).__init__()
         
         #Get data shape
-        self.in_channels, self.row_len, self.col_len = data_shape
+        #self.in_channels, self.row_len, self.col_len = data_shape
+        self.row_len, self.col_len = data_shape
         
-        self.learned_embedding = nn.Parameter(torch.zeros(data_shape))
+        self.learned_embedding = torch.zeros(data_shape)
+        self.learned_embedding = nn.Parameter(self.learned_embedding[None,:,:])
+                                              
         
         self.dropout = nn.Dropout(p=dropout)
         
@@ -69,9 +72,10 @@ class Convlayer(nn.Module):
         #x = self.flatten(x)
         #print(x.shape)
         #x = torch.transpose(x,1,2)
-        print(f'DATA SHAPE: {data.shape}')
+        #print(f'DATA SHAPE: {data.shape}')
+        batch = data.shape[0]
         patches = data.unfold(2,self.row_len,self.row_len).unfold(3,self.col_len,self.col_len)
-        patches = torch.reshape(patches,(self.batch,self.num_patches**2,self.embed_dim))
+        patches = torch.reshape(patches,(batch,self.num_patches**2,self.embed_dim))
         
         #print(x.shape)
         x = self.dnn(patches)
@@ -83,16 +87,19 @@ class MultiHeadAttention(nn.Module):
     def __init__(self,data_shape,num_heads):
         
         super(MultiHeadAttention,self).__init__()
-        self.batch, self.patch, self.embed = data_shape
+        #self.batch, self.patch, self.embed = data_shape
+        self.patch, self.embed = data_shape
         self.attn = nn.MultiheadAttention(self.embed,num_heads,batch_first = True)
     def forward(self,data):
+        #data = torch.reshape(data,(data.shape[1],data.shape[2],data.shape[3]))
         outputs , _ = self.attn(query=data, key=data, value=data, need_weights = False)
         return outputs
 
 class MLP(nn.Module):
     def __init__(self,data_shape,output_size,dropout = .1):
         super(MLP,self).__init__()
-        self.batch, self.patch, self.embed = data_shape
+        #self.batch, self.patch, self.embed = data_shape
+        self.patch, self.embed = data_shape
         hidden_output = self.embed * 2
         self.lnn1 = nn.Linear(self.embed, hidden_output)
         self.dropout1 = nn.Dropout(dropout)
@@ -115,7 +122,8 @@ class TransformerEncoder(nn.Module):
     def __init__(self,data_shape,num_heads,dropout=.1):
         super(TransformerEncoder,self).__init__()
         self.data_shape = data_shape
-        self.batch, self.patch, self.embed = data_shape
+        self.patch, self.embed = data_shape
+        #self.batch, self.patch, self.embed = data_shape
         self.ln1 = nn.LayerNorm([self.patch,self.embed])
         self.ln2 = nn.LayerNorm([self.patch,self.embed])
         self.MHA = MultiHeadAttention(data_shape,num_heads)
@@ -147,7 +155,15 @@ class VisionTransformer(nn.Module):
         return x
     
 class ClassificationHead(nn.Module):
-    def __init__(self,input_layer,hidden_layer_1,hidden_layer_2,hidden_layer_3,num_output,dropout=.1):
+    def __init__(self,
+                 input_layer,
+                 hidden_layer_1,
+                 hidden_layer_2,
+                 hidden_layer_3,
+                 hidden_layer_4,
+                 hidden_layer_5,
+                 num_output,
+                 dropout=.1):
         super(ClassificationHead,self).__init__()
         self.ln1 = nn.LayerNorm(input_layer)
         self.fnn1 = nn.Linear(input_layer,hidden_layer_1)
@@ -158,7 +174,13 @@ class ClassificationHead(nn.Module):
         self.ln3 = nn.LayerNorm(hidden_layer_2)
         self.fnn3 = nn.Linear(hidden_layer_2,hidden_layer_3)
         self.dropout_3 = nn.Dropout(dropout)
-        self.fnn4 = nn.Linear(hidden_layer_3,num_output)
+        self.ln4 = nn.LayerNorm(hidden_layer_3)
+        self.fnn4 = nn.Linear(hidden_layer_3,hidden_layer_4)
+        self.dropout_4 = nn.Dropout(dropout)
+        self.ln5 = nn.LayerNorm(hidden_layer_4)
+        self.fnn5 = nn.Linear(hidden_layer_4,hidden_layer_5)
+        self.dropout_5 = nn.Dropout(dropout)
+        self.fnn6 = nn.Linear(hidden_layer_5,num_output)
         
     def forward(self,data):
         x = self.ln1(data)
@@ -170,7 +192,13 @@ class ClassificationHead(nn.Module):
         x = self.ln3(x)
         x = self.fnn3(x)
         x = self.dropout_3(x)
+        x = self.ln4(x)
         x = self.fnn4(x)
+        x = self.dropout_4(x)
+        x = self.ln5(x)
+        x = self.fnn5(x)
+        x = self.dropout_5(x)
+        x = self.fnn6(x)
         
         return x
     
@@ -185,6 +213,8 @@ class PRPModel(nn.Module):
                  hidden_layer_1,
                  hidden_layer_2,
                  hidden_layer_3,
+                 hidden_layer_4,
+                 hidden_layer_5,
                 dropout = .1):
         super(PRPModel,self).__init__()
         self.batch_size = data_shape[0]
@@ -201,30 +231,46 @@ class PRPModel(nn.Module):
         embed_dim = patch_row * patch_col * self.in_channels
         assert embed_dim % num_heads == 0, f"embed_dimension is not divisible by num_heads \nembed_dim: {embed_dim},heads:{num_heads}"
         
-        self.data_shape = (self.batch_size,num_patch**2,patch_row * patch_col * self.in_channels)
+        #self.data_shape = (self.batch_size,num_patch**2,patch_row * patch_col * self.in_channels)
+        self.data_shape = (num_patch**2,patch_row * patch_col * self.in_channels)
         
         self.pos_encode = PositionalEncoding(self.data_shape,dropout)
         
         
         self.visual_transformer = VisionTransformer(self.data_shape,num_heads,num_layers,dropout)
         
-        self.input_layer = self.data_shape[1] * self.data_shape[2]
+        #self.input_layer = self.data_shape[1] * self.data_shape[2]
+        #self.input_layer = self.data_shape[0] * self.data_shape[1]
+        self.input_layer = self.data_shape[0] * self.data_shape[1]
         
-        self.ClassificationHead = ClassificationHead(self.input_layer,
+        #self.ClassificationHead = ClassificationHead(self.input_layer,
+                                                     #hidden_layer_1,
+                                                     #hidden_layer_2,
+                                                     #hidden_layer_3,
+                                                     #num_output,
+                                                     #dropout=.1)
+                            
+        self.ClassificationHead = ClassificationHead(self.data_shape[1],
                                                      hidden_layer_1,
                                                      hidden_layer_2,
                                                      hidden_layer_3,
+                                                     hidden_layer_4,
+                                                     hidden_layer_5,
                                                      num_output,
                                                      dropout=.1)
         self.softmax = nn.Softmax(dim = 1)
         
     def forward(self,data):
+        batch_size = data.shape[0]
+        
         x = self.conv_layer(data)
         x = self.pos_encode(x)
         x = self.visual_transformer(x)
-        x = torch.reshape(x,(self.batch_size,self.input_layer))
+        #print(x.shape)
+        #x = torch.reshape(x,(batch_size,self.input_layer))
+        x = torch.squeeze(x[:,-1,:])
         x = self.ClassificationHead(x)
-        print(f"BEFORE SOFTMAX: {x}")
+        #print(f"BEFORE SOFTMAX: {x}")
         x = self.softmax(x)
         #x = torch.argmax(x,axis = 1)
         return x
