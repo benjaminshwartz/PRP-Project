@@ -80,6 +80,8 @@ if __name__ == "__main__":
     hidden_layer_1 = 720
     hidden_layer_2 = 360
     hidden_layer_3 = 90
+    hidden_layer_4 = 100,
+    hidden_layer_5 = 25
 
     num_classification_output = 5
     dropout = .1
@@ -101,6 +103,8 @@ if __name__ == "__main__":
          hidden_layer_1,
          hidden_layer_2,
          hidden_layer_3,
+         hidden_layer_4,
+         hidden_layer_5,
          num_classification_output,
          dropout,
          save_interval,
